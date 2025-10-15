@@ -60,9 +60,134 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # 构建APK
-      - name: Build APK
-        run: flutter build apk --release --split-per-abi
+      # 构建APK - 智能镜像切换方案
+      - name: Build APK with smart mirror switching
+        run: |
+          cd android
+          
+          # 备份原始build.gradle
+          cp build.gradle build.gradle.backup
+          
+          # 创建使用官方源的build.gradle模板
+          cat > build.gradle.official << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+              }
+          }
+          
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+          
+          # 测试镜像健康状态函数
+          test_mirror_health() {
+            echo "测试镜像健康状态..."
+            local mirrors=(
+              "https://maven.aliyun.com/repository/public"
+              "https://maven.aliyun.com/repository/google"
+              "https://repo1.maven.org/maven2"
+              "https://maven.google.com"
+            )
+          
+            for mirror in "${mirrors[@]}"; do
+              if curl --connect-timeout 5 --max-time 10 --head --silent --fail "$mirror" > /dev/null; then
+                echo "✓ $mirror 可用"
+                if [[ $mirror == *"aliyun"* ]]; then
+                  return 0  # 阿里云可用
+                else
+                  return 1  # 只有官方源可用
+                fi
+              else
+                echo "✗ $mirror 不可用"
+              fi
+            done
+            return 2  # 所有镜像都不可用
+          }
+          
+          # 检测镜像状态
+          test_mirror_health
+          mirror_status=$?
+          
+          case $mirror_status in
+            0)
+              echo "使用阿里云镜像"
+              # 使用原始配置
+              ;;
+            1)
+              echo "切换到官方镜像"
+              # 替换阿里云镜像为官方镜像
+              sed -i 's|https://maven.aliyun.com/repository/public||g' build.gradle
+              sed -i 's|https://maven.aliyun.com/repository/google||g' build.gradle
+              # 确保包含官方仓库
+              if ! grep -q "google()" build.gradle; then
+                  sed -i '/repositories {/a\        google()\n        mavenCentral()' build.gradle
+              fi
+              ;;
+            2)
+              echo "所有镜像都不可用，使用官方配置模板"
+              cp build.gradle.official build.gradle
+              ;;
+          esac
+          
+          cd ..
+          
+          # 设置Gradle参数
+          export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000"
+          
+          # 清理项目
+          echo "清理项目..."
+          flutter clean
+          flutter pub get
+          
+          # 构建函数，带重试机制
+          build_with_retry() {
+            for attempt in {1..3}; do
+              echo "构建尝试 $attempt/3"
+              if flutter build apk --release --split-per-abi; then
+                echo "构建成功!"
+                return 0
+              else
+                echo "构建失败"
+                if [ $attempt -lt 3 ]; then
+                  echo "等待30秒后重试..."
+                  sleep 30
+                  # 如果是第一次失败，尝试强制切换到官方源
+                  if [ $attempt -eq 1 ]; then
+                    echo "尝试强制切换到官方源..."
+                    cd android
+                    sed -i 's|https://maven.aliyun.com/repository/public||g' build.gradle
+                    sed -i 's|https://maven.aliyun.com/repository/google||g' build.gradle
+                    # 确保包含官方仓库
+                    if ! grep -q "google()" build.gradle; then
+                        sed -i '/repositories {/a\        google()\n        mavenCentral()' build.gradle
+                    fi
+                    cd ..
+                    flutter clean
+                    flutter pub get
+                  fi
+                else
+                  echo "所有重试都失败了"
+                  return 1
+                fi
+              fi
+            done
+          }
+          
+          # 执行构建
+          build_with_retry
 
       # 创建Release并上传APK文件
       - name: Upload Release Assets
@@ -79,6 +204,7 @@ jobs:
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # 合并上传所有APK文件为一个Artifact，设置3天后自动删除
       - name: Upload All APKs as Artifact
         uses: actions/upload-artifact@v4.6.2
