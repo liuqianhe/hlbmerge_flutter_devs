@@ -2,30 +2,17 @@ name: Release Android-dev
 on:
   # 手动触发
   workflow_dispatch:
-    inputs:
-      branch:
-        description: '要构建的分支'
-        required: true
-        default: 'main'
-        type: string
-      tag:
-        description: '发布标签'
-        required: true
-        default: 'v1.0.0'
-        type: string
-
 jobs:
   build:
     name: Build
     runs-on: ubuntu-22.04
     steps:
-      # 检出代码
+      # 使用本项目
       - uses: actions/checkout@v5.0.0
         with:
           # 指定拉取的分支
           ref: ${{ github.event.inputs.branch }}
-
-      # 设置flutter环境
+      #设置flutter
       - uses: subosito/flutter-action@v2.14.0
         with:
           # The Flutter version to make available on the path
@@ -33,25 +20,25 @@ jobs:
           # The Flutter build release channel
           channel: # optional, default is stable
 
-      # 设置JDK
+      # 设置jdk
       - name: Set up JDK
         uses: actions/setup-java@v5.0.0
         with:
           distribution: 'zulu'
           java-version: 17
 
-      # 获取flutter依赖
+      # Get flutter dependencies.
       - run: flutter pub get
 
-      # 从GitHub Secrets中恢复签名keystore
+      # 从GitHub Secrets中恢复签名 keystore
       - name: Restore signing keystore
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > android/app/hlbmerge.jks
-        # KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}只在上面这一句命令中有效
+        #KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}只在上面这一句命令中有效
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      # 从GitHub Secrets中恢复keystore.properties
+      # 从GitHub Secrets中恢复 keystore.properties
       - name: Generate keystore.properties
         run: |
           echo "storeFile=./hlbmerge.jks" > android/keystore.properties
@@ -63,31 +50,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # 构建APK
+      # 构建apk
       - name: Build APK
         run: flutter build apk --release --split-per-abi
 
-      # 创建Release并上传APK文件
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        with:
-          # 使用手动输入的标签
-          tag_name: ${{ github.event.inputs.tag }}
-          # 如果Release不存在则创建
-          generate_release_notes: true
-          # 发布名称
-          name: Release ${{ github.event.inputs.tag }}
-          # 覆盖已存在的Release
-          replace: true
-          # 文件列表，直接上传APK文件而不是压缩包
-          files: |
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 可选：保留原有的artifact上传步骤用于备份
       - name: Upload Artifact x86_64-release.apk
         uses: actions/upload-artifact@v4.6.2
         with:
