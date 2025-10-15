@@ -9,39 +9,36 @@ jobs:
     steps:
       # 使用本项目
       - uses: actions/checkout@v5.0.0
-        with:
-          # 指定拉取的分支
-          ref: ${{ github.event.inputs.branch }}
-      #设置flutter
+
+      # 设置Flutter环境
       - uses: subosito/flutter-action@v2.14.0
         with:
-          # The Flutter version to make available on the path
+          # 要使用的Flutter版本
           flutter-version: 3.27.4
-          # The Flutter build release channel
-          channel: # optional, default is stable
+          # Flutter构建发布渠道
+          channel: # 可选，默认为stable
 
-      # 设置jdk
-      - name: Set up JDK
+      # 设置JDK环境
+      - name: 设置JDK
         uses: actions/setup-java@v5.0.0
         with:
           distribution: 'zulu'
           java-version: 17
 
-      # Get flutter dependencies.
+      # 获取Flutter依赖
       - run: flutter pub get
 
-      # 从GitHub Secrets中恢复签名 keystore
-      - name: Restore signing keystore
+      # 从GitHub Secrets恢复签名密钥库
+      - name: 恢复签名密钥库
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/hlbmerge.jks
-        #KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}只在上面这一句命令中有效
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/keystore.jks
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      # 从GitHub Secrets中恢复 keystore.properties
-      - name: Generate keystore.properties
+      # 从GitHub Secrets生成keystore.properties文件
+      - name: 生成keystore.properties
         run: |
-          echo "storeFile=./hlbmerge.jks" > android/keystore.properties
+          echo "storeFile=./keystore.jks" > android/keystore.properties
           echo "storePassword=${KEYSTORE_PASSWORD}" >> android/keystore.properties
           echo "keyAlias=${KEY_ALIAS}" >> android/keystore.properties
           echo "keyPassword=${KEY_PASSWORD}" >> android/keystore.properties
@@ -50,23 +47,26 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # 构建apk
-      - name: Build APK
+      # 构建APK文件
+      - name: 构建APK
         run: flutter build apk --release --split-per-abi
 
-      - name: Upload Artifact x86_64-release.apk
+      # 上传x86_64架构的APK文件
+      - name: 上传x86_64架构APK
         uses: actions/upload-artifact@v4.6.2
         with:
           name: app-x86_64-release
           path: build/app/outputs/flutter-apk/app-x86_64-release.apk
 
-      - name: Upload Artifact armeabi-v7a-release.apk
+      # 上传armeabi-v7a架构的APK文件
+      - name: 上传armeabi-v7a架构APK
         uses: actions/upload-artifact@v4.6.2
         with:
           name: app-armeabi-v7a-release
           path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
 
-      - name: Upload Artifact arm64-v8a-release.apk
+      # 上传arm64-v8a架构的APK文件
+      - name: 上传arm64-v8a架构APK
         uses: actions/upload-artifact@v4.6.2
         with:
           name: app-arm64-v8a-release
