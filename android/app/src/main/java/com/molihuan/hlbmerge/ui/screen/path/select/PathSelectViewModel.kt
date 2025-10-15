@@ -75,6 +75,16 @@ class PathSelectViewModel @Inject constructor() : ViewModel() {
                 R.mipmap.ico_bilibili
             ),
             BiliAppInfo(
+                "哔哩哔哩(莫奈版)",
+                "tv.danmaku.bilj",
+                R.mipmap.ico_tv_danmaku_bilj
+            ),
+            BiliAppInfo(
+                "哔哩哔哩(精简版)",
+                "tv.danmaku.bilu",
+                R.mipmap.ico_bilibili
+            ),
+            BiliAppInfo(
                 "哔哩哔哩(概念版)",
                 "com.bilibili.app.blue",
                 R.mipmap.ico_bilibili_blue
